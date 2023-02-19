@@ -1,0 +1,117 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["public", "course", "review"]
+}
+
+model Example {
+  id    Int     @id @default(autoincrement())
+  title String?
+
+  @@map("example")
+  @@schema("public")
+}
+
+model Faculty {
+  id            String         @id @default(cuid())
+  slug          String         @unique
+  title         String
+  learningPaths LearningPath[]
+  courses       Course[]
+
+  @@map("faculties")
+  @@schema("course")
+}
+
+model LearningPath {
+  id          String   @id @default(cuid())
+  facultyId   String   @map("faculty_id")
+  slug        String   @unique
+  title       String
+  description String
+  url         String   @unique
+  badgeUrl    String   @map("badge_url")
+  isSchool    Boolean  @default(false) @map("is_school")
+  faculty     Faculty  @relation(fields: [facultyId], references: [id])
+  courses     Course[]
+
+  @@map("learning_paths")
+  @@schema("course")
+}
+
+model Course {
+  id                       String         @id @default(cuid())
+  facultyId                String         @map("faculty_id")
+  teacherId                String
+  slug                     String         @unique
+  title                    String
+  description              String
+  goals                    String[]
+  level                    CourseLevel
+  url                      String         @unique
+  badgeUrl                 String         @map("badge_url")
+  expectedReviews          Int            @default(0) @map("expected_reviews")
+  areReviewsAlreadyScraped Boolean        @default(false) @map("are_reviews_already_scraped")
+  faculty                  Faculty        @relation(fields: [facultyId], references: [id])
+  learningPaths            LearningPath[]
+  teacher                  Teacher        @relation(fields: [teacherId], references: [id])
+  reviews                  Review[]
+
+  @@map("courses")
+  @@schema("course")
+}
+
+enum CourseLevel {
+  BASICO
+  INTERMEDIO
+  AVANZADO
+
+  @@map("course_levels")
+  @@schema("course")
+}
+
+model Teacher {
+  id          String   @id @default(cuid())
+  username    String   @unique
+  name        String
+  description String?
+  url         String   @unique
+  avatarUrl   String   @map("avatar_url")
+  courses     Course[]
+
+  @@map("teachers")
+  @@schema("course")
+}
+
+model Reviewer {
+  id        String   @id @default(cuid())
+  username  String   @unique
+  name      String
+  avatarUrl String   @map("avatar_url")
+  reviews   Review[]
+
+  @@map("reviewers")
+  @@schema("review")
+}
+
+model Review {
+  id               String   @id @default(cuid())
+  reviewerUsername String   @map("reviewer_username")
+  courseSlug       String   @map("course_slug")
+  content          String
+  rating           Int
+  reviwer          Reviewer @relation(fields: [reviewerUsername], references: [username])
+  course           Course   @relation(fields: [courseSlug], references: [slug])
+
+  @@unique([reviewerUsername, courseSlug])
+  @@map("reviews")
+  @@schema("review")
+}
