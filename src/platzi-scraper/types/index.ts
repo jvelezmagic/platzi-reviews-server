@@ -1,4 +1,6 @@
-type CoursesPageData = {
+import { CourseLevel } from '@prisma/client';
+
+export type CoursesPageData = {
   slug: string;
   title: string;
   learningPaths: {
@@ -15,13 +17,60 @@ type CoursesPageData = {
   }[];
 }[];
 
-type ProcessedCoursePageData = {
-  courseSlug: string;
-  courseUrl: string;
-  facultyConnection: {
+export type ProcessedCoursePageData = {
+  slug: string;
+  url: string;
+  faculty: {
     connect: { slug: string };
   };
-  learningPathsConnection: {
+  learningPaths: {
     connect: { slug: string }[];
   };
+};
+
+export type ScrapedCourseInfo = {
+  title: string;
+  description: string;
+  goals: string[];
+  badgeUrl: string;
+  level: CourseLevel;
+  expectedReviews: number;
+  teacher: {
+    username: string;
+    name: string;
+    description: string;
+    url: string;
+    avatarUrl: string;
+  };
+};
+
+export type PreparedCourseInfo = {
+  slug: string;
+  title: string;
+  description: string;
+  goals: string[];
+  badgeUrl: string;
+  url: string;
+  level: CourseLevel;
+  expectedReviews: number;
+  teacher: {
+    username: string;
+    name: string;
+    description: string;
+    url: string;
+    avatarUrl: string;
+  };
+  faculty: {
+    connect: { slug: string };
+  };
+  learningPaths: {
+    connect: { slug: string }[];
+  };
+};
+
+export type BatchExecuteConfig = {
+  batchSize?: number;
+  delayBetweenBatches?: number;
+  maxRetries?: number;
+  delayBetweenRetries?: number;
 };

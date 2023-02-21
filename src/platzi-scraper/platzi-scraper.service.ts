@@ -9,6 +9,14 @@ import cheerio from 'cheerio';
 import { CronJob } from 'cron';
 import slugify from 'slugify';
 
+import {
+  BatchExecuteConfig,
+  CoursesPageData,
+  PreparedCourseInfo,
+  ProcessedCoursePageData,
+  ScrapedCourseInfo,
+} from './types';
+
 @Injectable()
 export class PlatziScraperService {
   private readonly logger = new Logger(PlatziScraperService.name);
@@ -21,24 +29,36 @@ export class PlatziScraperService {
   ) {}
 
   onModuleInit() {
-    this.logger.log('Initializing Platzi Scraper');
+    this.logger.log('=== Initializing Platzi Scraper ===');
     const cronExpression = this.configService.get<string>(
-      'scraper.cron_expression',
+      'scraper.cronExpression',
     );
 
-    this.logger.log(`Cron expression: ${cronExpression}`);
+    const coursesBatchConfig = this.configService.get<BatchExecuteConfig>(
+      'scraper.coursesBatchConfig',
+    );
 
-    const job = new CronJob(cronExpression, this.scrapePlatzi.bind(this));
+    const reviewsBatchConfig = this.configService.get<BatchExecuteConfig>(
+      'scraper.reviewsBatchConfig',
+    );
+
+    const job = new CronJob(
+      cronExpression,
+      this.scrapePlatzi.bind(this, coursesBatchConfig, reviewsBatchConfig),
+    );
 
     this.schedulerRegistry.addCronJob('platzi-scraper', job);
 
     job.start();
 
-    this.logger.log('Platzi Scraper initialized');
+    this.logger.log('=== Platzi Scraper initialized ===');
   }
 
-  async scrapePlatzi() {
-    this.logger.log('Scraping (START)');
+  async scrapePlatzi(
+    coursesBatchConfig: BatchExecuteConfig = {},
+    reviewsBatchConfig: BatchExecuteConfig = {},
+  ) {
+    this.logger.log('=== Scraping (PLATZI START) ===');
     const coursesPageData = await this.scrapeMainCoursesPage();
 
     await this.saveFacultiesAndLearningPaths(coursesPageData);
@@ -46,289 +66,340 @@ export class PlatziScraperService {
     const processedCoursePageData =
       this.prepareCoursesPageDataForCourseScraping(coursesPageData);
 
-    let errorsCourseCount = 0;
-    let processedCourseCount = 0;
-    const forceAll = this.configService.get<boolean>('scraper.force_all');
-    for await (const coursePageData of processedCoursePageData) {
-      const {
-        courseSlug,
-        courseUrl,
-        facultyConnection,
-        learningPathsConnection,
-      } = coursePageData;
-      if (!forceAll) {
-        const course = await this.prisma.course.findUnique({
-          where: { slug: courseSlug },
-          select: { areReviewsAlreadyScraped: true },
-        });
+    const results = await this.scrapeAndSaveCoursesInfo(
+      processedCoursePageData,
+      coursesBatchConfig,
+    );
 
-        if (course && course.areReviewsAlreadyScraped) {
-          this.logger.log(
-            `Skipping - Course: ${courseSlug} - Already exists in DB`,
-          );
-          continue;
-        }
-      }
+    const succeded_courses = results.filter((result) => result.success);
+    const failed_courses = results.filter((result) => !result.success);
 
-      const maxRetries = this.configService.get<number>(
-        'scraper.max_retries_per_course',
+    this.logger.log(
+      `=== Scraping courses status === Succeded: ${succeded_courses.length} Failed: ${failed_courses.length} ===`,
+    );
+
+    let failed_courses_count = 0;
+    let succeded_courses_count = 0;
+    for await (const { url, slug } of succeded_courses) {
+      this.logger.log(`=== Scraping (REVIEWS START): ${url} ===`);
+
+      const reviews_url = `${url.replace('www.', '')}opiniones/`;
+
+      const scrapeCourseReviewsStatus = await this.scrapeCourseReviews(
+        reviews_url,
+        slug,
+        reviewsBatchConfig,
       );
-      let retries = 0;
-      while (retries < maxRetries) {
-        try {
-          const courseData = await this.scrapeCourse(courseUrl);
-          if (!courseData) {
-            errorsCourseCount++;
-            break;
-          }
 
-          const { reviews, teacher, ...course } = courseData;
-
-          this.logger.log(`Saving - Course: ${courseSlug}`);
-          let totalReviews = 0;
-
-          const newReviewsCount = await this.prisma.$transaction(
-            async (tx) => {
-              await tx.teacher.upsert({
-                where: { username: teacher.username },
-                update: teacher,
-                create: { ...teacher },
-              });
-
-              await tx.course.upsert({
-                where: { slug: courseSlug },
-                update: {
-                  url: courseUrl,
-                  ...course,
-                  areReviewsAlreadyScraped: true,
-                  faculty: facultyConnection,
-                  learningPaths: learningPathsConnection,
-                  teacher: { connect: { username: teacher.username } },
-                },
-                create: {
-                  slug: courseSlug,
-                  url: courseUrl,
-                  ...course,
-                  faculty: facultyConnection,
-                  learningPaths: learningPathsConnection,
-                  teacher: { connect: { username: teacher.username } },
-                  areReviewsAlreadyScraped: true,
-                },
-              });
-
-              await tx.reviewer.createMany({
-                data: reviews.map((review) => ({
-                  username: review.username,
-                  name: review.name,
-                  avatarUrl: review.avatarUrl,
-                })),
-                skipDuplicates: true,
-              });
-
-              const newReviewsCount = await tx.review.createMany({
-                data: reviews.map((review) => ({
-                  reviewerUsername: review.username,
-                  courseSlug: courseSlug,
-                  content: review.content,
-                  rating: review.rating,
-                })),
-                skipDuplicates: true,
-              });
-
-              new Promise((resolve) => {
-                setTimeout(
-                  resolve,
-                  this.configService.get<number>(
-                    'scraper.delay_between_courses',
-                  ),
-                );
-              });
-
-              return newReviewsCount;
-            },
-            {
-              isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-              timeout: 40000,
-              maxWait: 40000,
-            },
-          );
-
-          processedCourseCount++;
-          totalReviews += newReviewsCount.count;
-
-          this.logger.log(
-            `Saved - Course: ${courseSlug} - Reviews: ${totalReviews}`,
-          );
-          break;
-        } catch (error) {
-          this.logger.error(error);
-          retries++;
-          this.logger.log(
-            `Retrying - Course: ${courseSlug} - Retry: ${retries}`,
-          );
-
-          if (retries === maxRetries) {
-            this.logger.error(
-              `Error - Course: ${courseSlug} - Max retries reached`,
-            );
-
-            errorsCourseCount++;
-            break;
-          }
-
-          await new Promise((resolve) => {
-            setTimeout(
-              resolve,
-              this.configService.get<number>(
-                'scraper.reviews_delay_between_retries',
-              ),
-            );
-          });
-        }
+      if (scrapeCourseReviewsStatus) {
+        succeded_courses_count++;
+      } else {
+        failed_courses_count++;
       }
 
       this.logger.log(
-        `Scraping (END) - Processed: ${processedCourseCount} - Errors: ${errorsCourseCount}`,
+        `=== Scraping (REVIEWS STATUS) === Succeded: ${succeded_courses_count} Failed: ${failed_courses_count} ===`,
       );
+
+      this.logger.log(`=== Scraping (REVIEWS END): ${url} ===`);
     }
 
     this.logger.log(
-      `Scraping (END) - Processed: ${processedCourseCount} - Errors: ${errorsCourseCount}`,
+      `=== Scraping (REVIEWS STATUS) === Succeded: ${succeded_courses_count} Failed: ${failed_courses_count} ===`,
     );
 
-    this.logger.log('Scraping (END)');
+    this.logger.log('Scraping (PLATZI END) ===');
+  }
 
-    return true;
+  async scrapeCourseReviews(
+    course_review_url: string,
+    slug: string,
+    batchConfig: BatchExecuteConfig,
+  ) {
+    this.logger.log(`=== Scraping (REVIEWS START) ${course_review_url} ===`);
+    const totalReviewPages = await this.findTotalReviewPages(course_review_url);
+    this.logger.log(`=== Scrapint (REVIEWS PAGES): ${totalReviewPages} ===`);
+    const reviewPages = await this.batchExecute<number, boolean>(
+      Array.from({ length: totalReviewPages }, (_, i) => i + 1),
+      async (page) => {
+        const url = `${course_review_url}${page}/`;
+        try {
+          const reviews = await this.scrapeCourseReviewsOnPage(url);
+
+          while (true) {
+            try {
+              await this.prisma.reviewer.createMany({
+                data: reviews.map((review) => review.reviewer),
+                skipDuplicates: true,
+              });
+
+              await this.prisma.review.createMany({
+                data: reviews.map((review) => ({
+                  courseSlug: slug,
+                  reviewerUsername: review.reviewer.username,
+                  ...review.review,
+                })),
+                skipDuplicates: true,
+              });
+              break;
+            } catch (error) {
+              if (error.message.includes('connection pool')) {
+                continue;
+              }
+            }
+          }
+
+          return true;
+        } catch (error) {
+          this.logger.log(error);
+          return false;
+        }
+      },
+      batchConfig,
+    );
+
+    // if all reviewPages are true then update course
+    if (reviewPages.every((page) => page)) {
+      const reviewsCount = await this.prisma.course.update({
+        where: { slug },
+        data: { areReviewsAlreadyScraped: true },
+        select: { _count: { select: { reviews: true } } },
+      });
+      this.logger.log(
+        `=== Scraping (REVIEWS SUCCESS): ${course_review_url} with ${reviewsCount._count.reviews} reviews ===`,
+      );
+      return true;
+    } else {
+      const reviewsCount = await this.prisma.course.update({
+        where: { slug },
+        data: { areReviewsAlreadyScraped: false },
+        select: { _count: { select: { reviews: true } } },
+      });
+      this.logger.log(
+        `=== Scraping (REVIEWS FAILED): ${course_review_url} with ${reviewsCount._count.reviews} ===`,
+      );
+
+      return false;
+    }
+  }
+
+  async scrapeAndSaveCoursesInfo(
+    processedCoursePageData: ProcessedCoursePageData[],
+    batchConfig: BatchExecuteConfig = {},
+  ): Promise<{ url: string; slug: string; success: boolean }[]> {
+    const results = await this.batchExecute<
+      ProcessedCoursePageData,
+      { url: string; slug: string; success: boolean }
+    >(
+      processedCoursePageData,
+      async (coursePageData) => {
+        const { slug, url, faculty, learningPaths } = coursePageData;
+
+        const courseData = await this.scrapeCourseInfo(url);
+
+        if (courseData === null) {
+          return {
+            url,
+            slug,
+            success: false,
+          };
+        }
+
+        while (true) {
+          try {
+            await this.saveCourseInfo({
+              slug,
+              url,
+              faculty,
+              learningPaths,
+              ...courseData,
+            });
+            break;
+          } catch (error) {
+            if (error.message.includes('connection pool')) {
+              continue;
+            }
+          }
+        }
+
+        return {
+          url,
+          slug,
+          success: true,
+        };
+      },
+      batchConfig,
+    );
+
+    return results;
+  }
+
+  async saveCourseInfo(courseInfo: PreparedCourseInfo) {
+    this.logger.log(`=== Saving course info: ${courseInfo.url} ===`);
+    const { teacher, ...course } = courseInfo;
+
+    try {
+      await this.prisma.teacher.upsert({
+        where: { username: teacher.username },
+        update: teacher,
+        create: teacher,
+      });
+
+      await this.prisma.course.upsert({
+        where: { slug: course.slug },
+        update: course,
+        create: {
+          ...course,
+          teacher: {
+            connect: { username: teacher.username },
+          },
+        },
+      });
+      this.logger.log(`=== Saving course info: ${courseInfo.url} DONE ===`);
+      return true;
+    } catch (error) {
+      this.logger.error(error);
+      this.logger.error(`=== Saving course info: ${courseInfo.url} FAILED ===`);
+      return false;
+    }
   }
 
   async saveFacultiesAndLearningPaths(faculties: CoursesPageData) {
-    this.logger.log('=== Saving faculties and learning paths ===');
+    this.logger.log('=== Saving (FACULTIES-LEARING-PATHS START) ===');
     try {
-      for await (const faculty of faculties) {
-        const { title, slug, learningPaths } = faculty;
+      await Promise.all(
+        faculties.map(async (faculty) => {
+          const { title, slug, learningPaths } = faculty;
 
-        this.logger.log(`=== Saving faculty ${title} ===`);
+          this.logger.log(`=== Saving (FACULTY START): ${title} ===`);
 
-        const facultyData = { slug, title };
-        const upsertData = {
-          where: { slug },
-          update: facultyData,
-          create: { ...facultyData },
-        } satisfies Prisma.FacultyUpsertArgs;
+          while (true) {
+            try {
+              await this.upsertFaculty({ slug, title });
+              break;
+            } catch (error) {
+              if (error.message.includes('connection pool')) {
+                continue;
+              }
+            }
+          }
 
-        await this.prisma.faculty.upsert(upsertData);
+          const learningPathUpsertPromises = learningPaths.map(
+            async (learningPath) => {
+              this.logger.log(
+                `=== Saving (LEARNING-PATH START): ${learningPath.title} ===`,
+              );
 
-        for await (const learningPath of learningPaths) {
-          const { title, slug, description, url, badgeUrl, isSchool } =
-            learningPath;
-          this.logger.log(`=== Saving learning path ${title} ===`);
+              while (true) {
+                try {
+                  await this.upsertLearningPath({
+                    ...learningPath,
+                    facultySlug: slug,
+                  });
+                  break;
+                } catch (error) {
+                  if (error.message.includes('connection pool')) {
+                    continue;
+                  }
+                }
+              }
 
-          const learningPathData = {
-            slug,
-            title,
-            description,
-            url,
-            badgeUrl,
-            isSchool,
-            faculty: { connect: { slug: faculty.slug } },
-          };
+              this.logger.log(
+                `=== Saving (LEARNING-PATH END) ${learningPath.title} ===`,
+              );
+            },
+          );
 
-          const upsertData = {
-            where: { slug },
-            update: learningPathData,
-            create: { ...learningPathData },
-          } satisfies Prisma.LearningPathUpsertArgs;
+          await Promise.all(learningPathUpsertPromises);
 
-          await this.prisma.learningPath.upsert(upsertData);
+          this.logger.log(`=== Saving (FACULTY END): ${title} ===`);
+        }),
+      );
 
-          this.logger.log(`=== Saving learning path ${title} END ===`);
-        }
-
-        this.logger.log(`=== Saving faculty ${title} END ===`);
-      }
-
-      this.logger.log('=== Saving faculties and learning paths DONE ===');
+      this.logger.log('=== Saving (FACULTIES-LEARING-PATHS END) ===');
+      return true;
     } catch (error) {
       this.logger.error(error);
       return false;
     }
-
-    return true;
   }
 
-  async scrapeCourse(courseUrl: string) {
-    this.logger.log(`Scraping (START) - Course: ${courseUrl}`);
-    const { data } = await axios.get(courseUrl).catch((err) => {
-      this.logger.error(err);
-      this.logger.error(`Scraping (ERROR) - Course: ${courseUrl}`);
-      return null;
-    });
-    const $ = cheerio.load(data);
+  async upsertFaculty({ slug, title }) {
+    const upsertData = {
+      where: { slug },
+      update: { slug, title },
+      create: { slug, title },
+    } satisfies Prisma.FacultyUpsertArgs;
 
-    const title = $('.Hero-content-title').text().trim();
-    const description = $('.Hero-content-description').text().trim();
+    await this.prisma.faculty.upsert(upsertData);
+  }
 
-    const goals: string[] = $('.Hero-content-bullets li')
-      .map((_, goal) => $(goal).text().trim())
-      .get();
-
-    const badgeUrl = $('.Hero-badge img').attr('src');
-
-    const level = $('.CourseExtraInfo-content-level-text').text().trim();
-
-    const levelMap = {
-      básico: CourseLevel.BASICO,
-      intermedio: CourseLevel.INTERMEDIO,
-      avanzado: CourseLevel.AVANZADO,
-    };
-
-    const expectedReviewCount =
-      parseInt($('.CourseExtraInfo-content-opinions').text().trim(), 10) || 0;
-
-    const teacher = await this.scrapeCourseTeacher($);
-
-    const reviews = await this.scrapeAllCourseReviews(
-      `${courseUrl.replace('www.', '')}opiniones/`,
-    );
-    this.logger.log(`Scraping (END) - Course: ${courseUrl}`);
-    return {
+  async upsertLearningPath({
+    slug,
+    title,
+    description,
+    url,
+    badgeUrl,
+    isSchool,
+    facultySlug,
+  }) {
+    const learningPathData = {
+      slug,
       title,
       description,
-      goals,
-      badgeUrl,
-      level: levelMap[level] as CourseLevel,
-      expectedReviews: expectedReviewCount,
-      teacher,
-      reviews,
-    };
-  }
-
-  async scrapeCourseTeacher($: cheerio.Root) {
-    const username = $('.Hero-teacher-anchor')
-      .attr('href')
-      .replace('/profesores/', '')
-      .replace('/profes/', '')
-      .replace('/', '');
-
-    const name = $('.Hero-teacher-name').text().trim();
-
-    const description = $('.Hero-teacher-description')?.text().trim() || null;
-
-    const url = `https://platzi.com/profes/${username}/`;
-
-    const avatarUrl = $('.Hero-background img').attr('src');
-
-    return {
-      username,
-      name,
-      description,
       url,
-      avatarUrl,
+      badgeUrl,
+      isSchool,
+      faculty: { connect: { slug: facultySlug } },
     };
+
+    const upsertData = {
+      where: { slug },
+      update: learningPathData,
+      create: learningPathData,
+    } satisfies Prisma.LearningPathUpsertArgs;
+
+    await this.prisma.learningPath.upsert(upsertData);
   }
 
+  prepareCoursesPageDataForCourseScraping(
+    coursesPageData: CoursesPageData,
+  ): ProcessedCoursePageData[] {
+    const result: ProcessedCoursePageData[] = [];
+    const processedCourses: Record<string, ProcessedCoursePageData> = {};
+
+    coursesPageData.forEach(({ slug: facultySlug, learningPaths }) => {
+      learningPaths.forEach(({ slug: learningPathSlug, courses }) => {
+        courses.forEach(({ slug: courseSlug, url }) => {
+          if (!processedCourses[courseSlug]) {
+            processedCourses[courseSlug] = {
+              slug: courseSlug,
+              url: url,
+              faculty: { connect: { slug: facultySlug } },
+              learningPaths: {
+                connect: [{ slug: learningPathSlug }],
+              },
+            };
+            result.push(processedCourses[courseSlug]);
+          }
+          processedCourses[courseSlug].learningPaths.connect.push({
+            slug: learningPathSlug,
+          });
+        });
+      });
+    });
+
+    return result;
+  }
+
+  /*
+   * Scrapes the main courses page and returns an array of faculties
+   * Each faculty contains an array of learning paths
+   * Each learning path contains an array of courses
+   * Each course contains a slug and a url
+   */
   async scrapeMainCoursesPage(): Promise<CoursesPageData> {
-    this.logger.log('Scraping (START) - Main courses page');
+    this.logger.log('=== Scraping (MAIN-PAGE-COURSES START) ===');
     const { data } = await axios.get(this.COURSES_URL);
     const $ = cheerio.load(data);
     const coursesPageData = await Promise.all<CoursesPageData>(
@@ -397,105 +468,88 @@ export class PlatziScraperService {
         })
         .get(),
     );
-    this.logger.log('Scraping (END) - Main courses page');
+    this.logger.log('=== Scraping (MAIN-PAGE-COURSES END) ===');
 
     return coursesPageData;
   }
 
-  prepareCoursesPageDataForCourseScraping(
-    coursesPageData: CoursesPageData,
-  ): ProcessedCoursePageData[] {
-    const result: ProcessedCoursePageData[] = [];
-    const processedCourses: Record<string, ProcessedCoursePageData> = {};
-
-    coursesPageData.forEach(({ slug: facultySlug, learningPaths }) => {
-      learningPaths.forEach(({ slug: learningPathSlug, courses }) => {
-        courses.forEach(({ slug: courseSlug, url }) => {
-          if (!processedCourses[courseSlug]) {
-            processedCourses[courseSlug] = {
-              courseSlug,
-              courseUrl: url,
-              facultyConnection: { connect: { slug: facultySlug } },
-              learningPathsConnection: {
-                connect: [{ slug: learningPathSlug }],
-              },
-            };
-            result.push(processedCourses[courseSlug]);
-          }
-          processedCourses[courseSlug].learningPathsConnection.connect.push({
-            slug: learningPathSlug,
-          });
-        });
+  /*
+   * Scrapes the course page and returns an object with the course info
+   * If the course is not found, returns null
+   */
+  async scrapeCourseInfo(courseUrl: string): Promise<ScrapedCourseInfo | null> {
+    this.logger.log(`=== Scraping (START) - Course info: ${courseUrl} ===`);
+    try {
+      const response = await axios.get(courseUrl).catch((error) => {
+        this.logger.error(error);
+        return null;
       });
-    });
 
-    return result;
+      const levelMap = {
+        básico: CourseLevel.BASICO,
+        intermedio: CourseLevel.INTERMEDIO,
+        avanzado: CourseLevel.AVANZADO,
+      };
+
+      const { data } = response;
+
+      const $ = cheerio.load(data);
+
+      const info = {
+        title: $('.Hero-content-title').text().trim(),
+        description: $('.Hero-content-description').text().trim(),
+        goals: $('.Hero-content-bullets li')
+          .map((_, goal) => $(goal).text().trim())
+          .get(),
+        badgeUrl: $('.Hero-badge img').attr('src'),
+        level: levelMap[
+          $('.CourseExtraInfo-content-level-text').text().trim()
+        ] as CourseLevel,
+        expectedReviews:
+          parseInt($('.CourseExtraInfo-content-opinions').text().trim(), 10) ||
+          0,
+        teacher: await this.scrapeCourseTeacher($),
+      };
+
+      this.logger.log(`=== Scraping (END) - Course info: ${courseUrl} ===`);
+      return info;
+    } catch (error) {
+      this.logger.error(error);
+      this.logger.error(`=== Scraping (END) - Course info: ${courseUrl} ===`);
+      return null;
+    }
   }
 
-  async scrapeAllCourseReviews(url: string) {
+  /*
+   * Scrape the teacher info from the course page
+   */
+  async scrapeCourseTeacher($: cheerio.Root) {
+    const username = $('.Hero-teacher-anchor')
+      .attr('href')
+      .replace('/profesores/', '')
+      .replace('/profes/', '')
+      .replace('/', '');
+
+    const name = $('.Hero-teacher-name').text().trim();
+
+    const description = $('.Hero-teacher-description')?.text().trim() || null;
+
+    const url = `https://platzi.com/profes/${username}/`;
+
+    const avatarUrl = $('.Hero-background img').attr('src');
+
+    return {
+      username,
+      name,
+      description,
+      url,
+      avatarUrl,
+    };
+  }
+
+  async findTotalReviewPages(url: string): Promise<number> {
     const { data } = await axios.get(url);
     const $ = cheerio.load(data);
-    const totalPages = this.findTotalReviewPages($);
-
-    const batches = Array.from({ length: totalPages }, (_, i) => i + 1);
-    const batchesOfSize = batches.reduce((acc, batch, i) => {
-      if (
-        i %
-          this.configService.get<number>('scraper.reviews_pages_batch_size') ===
-        0
-      ) {
-        acc.push([batch]);
-      } else {
-        acc[acc.length - 1].push(batch);
-      }
-      return acc;
-    }, [] as number[][]);
-
-    const workerData = batchesOfSize.map((batch) => ({
-      url,
-      batch,
-    }));
-
-    const reviews_all = [];
-    for await (const data of workerData) {
-      const { url, batch } = data;
-      const reviews = await Promise.all<
-        {
-          name: string;
-          username: string;
-          avatarUrl: string;
-          content: string;
-          rating: number;
-        }[]
-      >(
-        batch.map(async (page) => {
-          const pageUrl = `${url}${page}/`;
-          const reviews = await this.scrapeCourseReviewsOnPage(pageUrl);
-          return reviews;
-        }),
-      );
-      reviews_all.push(reviews);
-
-      new Promise((resolve) =>
-        setTimeout(
-          resolve,
-          this.configService.get<number>('scraper.reviews_pages_batch_delay'),
-        ),
-      );
-    }
-
-    const output_reviews: {
-      name: string;
-      username: string;
-      avatarUrl: string;
-      content: string;
-      rating: number;
-    }[] = reviews_all.flat(2);
-
-    return output_reviews;
-  }
-
-  findTotalReviewPages($: cheerio.Root): number {
     const totalPagesItem = $('li.Pagination-item--total');
 
     if (totalPagesItem.length === 0) {
@@ -511,11 +565,21 @@ export class PlatziScraperService {
   }
 
   async scrapeCourseReviewsOnPage(url: string) {
-    this.logger.log(`=== Scraping (START - REVIEWS) at ${url} ===`);
+    this.logger.log(`=== Scraping (REVIEWS START) at ${url} ===`);
     const { data } = await axios.get(url);
     const $ = cheerio.load(data);
     const reviewCards = $('article.ReviewCard');
-    const reviews = await Promise.all(
+    const reviews: {
+      reviewer: {
+        name: string;
+        username: string;
+        avatarUrl: string;
+      };
+      review: {
+        content: string;
+        rating: number;
+      };
+    }[] = await Promise.all(
       reviewCards
         .map((_, reviewCard) => {
           const review = this.extractReviewInfo($(reviewCard));
@@ -523,21 +587,82 @@ export class PlatziScraperService {
         })
         .get(),
     );
-    this.logger.log(`=== Scraping (END - REVIEWS) at ${url} ===`);
+    this.logger.log(`=== Scraping (REVIEWS END) at ${url} ===`);
     return reviews;
   }
 
   extractReviewInfo(reviewCard: cheerio.Cheerio) {
     return {
-      name: reviewCard.find('h3.ReviewCard-name').text().trim(),
-      username: reviewCard
-        .find('a.ReviewCard-username')
-        .text()
-        .trim()
-        .replace('@', ''),
-      avatarUrl: reviewCard.find('img').attr('src'),
-      content: reviewCard.find('p.ReviewCard-description').text().trim(),
-      rating: reviewCard.find('svg.Stars-icon--active').length,
+      reviewer: {
+        name: reviewCard.find('h3.ReviewCard-name').text().trim(),
+        username: reviewCard
+          .find('a.ReviewCard-username')
+          .text()
+          .trim()
+          .replace('@', ''),
+        avatarUrl: reviewCard.find('img').attr('src'),
+      },
+      review: {
+        content: reviewCard.find('p.ReviewCard-description').text().trim(),
+        rating: reviewCard.find('svg.Stars-icon--active').length,
+      },
     };
+  }
+
+  async batchExecute<T, R>(
+    args: T[],
+    func: (...args: T[]) => Promise<R>,
+    config: BatchExecuteConfig = {},
+  ): Promise<R[]> {
+    const batchSize = config.batchSize || 10;
+    const delayBetweenBatches = config.delayBetweenBatches || 1000;
+    const maxRetries = config.maxRetries || 3;
+    const delayBetweenRetries = config.delayBetweenRetries || 1000;
+    const results: R[] = [];
+    const errors: Error[] = [];
+
+    const batches = await this.chunk(args, batchSize);
+
+    for (const batch of batches) {
+      const batchResults = await Promise.all(
+        batch.map(async (arg) => {
+          let retries = 0;
+          let result: R | null = null;
+          while (retries < maxRetries) {
+            try {
+              result = await func(arg);
+              break;
+            } catch (error) {
+              this.logger.error(error);
+              retries++;
+              await new Promise((resolve) =>
+                setTimeout(resolve, delayBetweenRetries),
+              );
+            }
+          }
+          if (result === null) {
+            errors.push(new Error('Max retries reached'));
+          }
+          return result;
+        }),
+      );
+
+      results.push(...batchResults);
+      await new Promise((resolve) => setTimeout(resolve, delayBetweenBatches));
+    }
+
+    if (errors.length > 0) {
+      this.logger.error(errors);
+    }
+
+    return results;
+  }
+
+  async chunk<T>(array: T[], chunkSize: number): Promise<T[][]> {
+    const chunks: T[][] = [];
+    for (let i = 0; i < array.length; i += chunkSize) {
+      chunks.push(array.slice(i, i + chunkSize));
+    }
+    return chunks;
   }
 }
