@@ -26,7 +26,7 @@ export class PlatziScraperService {
     private readonly prisma: PrismaService,
     private configService: ConfigService,
     private schedulerRegistry: SchedulerRegistry,
-  ) {}
+  ) { }
 
   onModuleInit() {
     this.logger.log('=== Initializing Platzi Scraper ===');
@@ -497,7 +497,7 @@ export class PlatziScraperService {
 
       const info = {
         title: $('.Hero-content-title').text().trim(),
-        description: $('.Hero-content-description').text().trim(),
+        description: $('.Hero-content-description p').text().trim(),
         goals: $('.Hero-content-bullets li')
           .map((_, goal) => $(goal).text().trim())
           .get(),
@@ -553,7 +553,7 @@ export class PlatziScraperService {
     const totalPagesItem = $('li.Pagination-item--total');
 
     if (totalPagesItem.length === 0) {
-      const totalPages = $('li.Pagination-item').filter(function () {
+      const totalPages = $('li.Pagination-item').filter(function() {
         return (
           !$(this).attr('class') || $(this).attr('class') === 'Pagination-item'
         );
