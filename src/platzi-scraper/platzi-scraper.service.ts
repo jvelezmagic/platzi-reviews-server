@@ -497,7 +497,7 @@ export class PlatziScraperService {
 
       const info = {
         title: $('.Hero-content-title').text().trim(),
-        description: $('.Hero-content-description p').text().trim(),
+        description: $('p.Hero-content-description').text().trim(),
         goals: $('.Hero-content-bullets li')
           .map((_, goal) => $(goal).text().trim())
           .get(),
