@@ -8,7 +8,16 @@ import { GraphQLModule } from '@nestjs/graphql';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+
 import { PlatziScraperModule } from './platzi-scraper/platzi-scraper.module';
+
+import { CommonModule } from './common/common.module';
+import { CourseModule } from './course/course.module';
+import { FacultyModule } from './faculty/faculty.module';
+import { LearningPathModule } from './learning-path/learning-path.module';
+import { ReviewModule } from './review/review.module';
+import { ReviewerModule } from './reviewer/reviewer.module';
+import { TeacherModule } from './teacher/teacher.module';
 
 import configuration from './config/configuration';
 
@@ -27,6 +36,13 @@ import configuration from './config/configuration';
       autoSchemaFile: 'schema.gql',
     }),
     PlatziScraperModule,
+    CommonModule,
+    CourseModule,
+    FacultyModule,
+    LearningPathModule,
+    ReviewModule,
+    ReviewerModule,
+    TeacherModule,
   ],
   controllers: [AppController],
   providers: [AppService],

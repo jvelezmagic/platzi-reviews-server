@@ -16,6 +16,29 @@
     "noImplicitAny": false,
     "strictBindCallApply": false,
     "forceConsistentCasingInFileNames": false,
-    "noFallthroughCasesInSwitch": false
+    "noFallthroughCasesInSwitch": false,
+    "paths": {
+      "@common/*": [
+        "./src/common/*"
+      ],
+      "@faculty/*": [
+        "./src/faculty/*"
+      ],
+      "@learning-path/*": [
+        "./src/learning-path/*"
+      ],
+      "@course/*": [
+        "./src/course/*"
+      ],
+      "@teacher/*": [
+        "./src/teacher/*"
+      ],
+      "@reviewer/*": [
+        "./src/reviewer/*"
+      ],
+      "@review/*": [
+        "./src/review/*"
+      ]
+    }
   }
 }
