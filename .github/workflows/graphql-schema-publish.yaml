@@ -7,7 +7,6 @@ on:
  
 jobs:
   test:
-    if: ${{ github.event.pull_request.merged }}
     name: Check Schema
     runs-on: ubuntu-latest
     environment: production
