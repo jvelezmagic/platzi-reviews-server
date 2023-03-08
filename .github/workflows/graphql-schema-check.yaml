@@ -1,0 +1,22 @@
+name: QraphQL schema check
+ 
+on: [push]
+ 
+jobs:
+  test:
+    name: Check Schema
+    runs-on: ubuntu-latest
+    environment: production
+    env: 
+      HIVE_TOKEN: ${{ secrets.HIVE_TOKEN }}
+ 
+    steps:
+      - name: Checkout
+        uses: actions/checkout@master
+
+      - name: Install GraphQL Hive CLI
+        run: |
+          curl -sSL https://graphql-hive.com/install.sh | sh
+ 
+      - name: Schema Check
+        run: hive schema:check ./schema.gql --github
