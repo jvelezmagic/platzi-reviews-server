@@ -71,7 +71,7 @@ export class CourseService {
           id: course.id,
         },
       })
-      .reviews();
+      .reviews(args);
 
     return reviews;
   }
