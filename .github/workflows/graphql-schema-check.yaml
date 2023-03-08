@@ -6,6 +6,7 @@ jobs:
   test:
     name: Check Schema
     runs-on: ubuntu-latest
+    environment: production
  
     steps:
       - name: Checkout
