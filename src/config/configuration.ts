@@ -1,7 +1,11 @@
 export default () => ({
   port: parseInt(process.env.PORT, 10) || 4000,
   node_env: process.env.NODE_ENV || 'development',
-
+  hive: {
+    enabled: process.env.HIVE_TOKEN ? true : false,
+    debug: process.env.HIVE_DEBUG === 'true' || false,
+    token: process.env.HIVE_TOKEN,
+  },
   scraper: {
     cronExpression: process.env.SCRAPER_CRON_EXPRESSION || '0 3 * * 1',
     coursesBatchConfig: {

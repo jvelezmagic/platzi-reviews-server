@@ -3,7 +3,7 @@
 
 generator client {
   provider        = "prisma-client-js"
-  previewFeatures = ["multiSchema"]
+  previewFeatures = ["multiSchema", "fullTextSearch"]
 }
 
 datasource db {
@@ -108,7 +108,7 @@ model Review {
   courseSlug       String   @map("course_slug")
   content          String
   rating           Int
-  reviwer          Reviewer @relation(fields: [reviewerUsername], references: [username])
+  reviewer         Reviewer @relation(fields: [reviewerUsername], references: [username])
   course           Course   @relation(fields: [courseSlug], references: [slug])
 
   @@unique([reviewerUsername, courseSlug])
