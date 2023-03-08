@@ -1,8 +1,9 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { PrismaModule } from 'nestjs-prisma';
 
+import { useHive } from '@graphql-hive/client';
 import { YogaDriver, YogaDriverConfig } from '@graphql-yoga/nestjs';
 import { GraphQLModule } from '@nestjs/graphql';
 
@@ -31,9 +32,21 @@ import configuration from './config/configuration';
     PrismaModule.forRoot({
       isGlobal: true,
     }),
-    GraphQLModule.forRoot<YogaDriverConfig>({
+    GraphQLModule.forRootAsync<YogaDriverConfig>({
       driver: YogaDriver,
-      autoSchemaFile: 'schema.gql',
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: async (configService: ConfigService) => ({
+        autoSchemaFile: 'schema.gql',
+        plugins: [
+          useHive({
+            enabled: configService.get<boolean>('hive.enabled'),
+            debug: configService.get<boolean>('hive.debug'),
+            token: configService.get<string>('hive.token'),
+            usage: true,
+          }),
+        ],
+      }),
     }),
     PlatziScraperModule,
     CommonModule,

@@ -20,6 +20,7 @@
     "test:e2e": "jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
+    "@graphql-hive/client": "^0.23.1",
     "@graphql-yoga/nestjs": "^0.3.1",
     "@nestjs/common": "^9.0.0",
     "@nestjs/config": "^2.3.1",
@@ -42,6 +43,7 @@
     "slugify": "^1.6.5"
   },
   "devDependencies": {
+    "@graphql-hive/cli": "^0.20.2",
     "@nestjs/cli": "^9.0.0",
     "@nestjs/schematics": "^9.0.0",
     "@nestjs/testing": "^9.0.0",
