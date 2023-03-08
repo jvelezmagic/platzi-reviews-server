@@ -72,7 +72,7 @@ export class CourseResolver {
   })
   async reviews(
     @Parent() course: Course,
-    args: ReviewFindManyArgs,
+    @Args() args: ReviewFindManyArgs,
   ): Promise<Review[]> {
     return this.courseService.reviews(course, args);
   }

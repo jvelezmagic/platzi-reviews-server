@@ -345,14 +345,6 @@ type Course {
   teacher: Teacher!
   faculty: Faculty!
   learningPaths(where: LearningPathWhereInput, orderBy: [LearningPathOrderByInput!], cursor: LearningPathWhereUniqueInput, take: Int = 10, skip: Int = 0): [LearningPath!]!
-  reviews: [Review!]!
-}
-
-type Reviewer {
-  id: ID!
-  username: String!
-  name: String!
-  avatarUrl: String!
   reviews(where: ReviewWhereInput, orderBy: [ReviewOrderByInput!], cursor: ReviewWhereUniqueInput, take: Int = 10, skip: Int = 0): [Review!]!
 }
 
@@ -381,6 +373,14 @@ enum ReviewOrderByRelevanceFieldEnum {
 input ReviewWhereUniqueInput {
   id: ID!
   username: String!
+}
+
+type Reviewer {
+  id: ID!
+  username: String!
+  name: String!
+  avatarUrl: String!
+  reviews(where: ReviewWhereInput, orderBy: [ReviewOrderByInput!], cursor: ReviewWhereUniqueInput, take: Int = 10, skip: Int = 0): [Review!]!
 }
 
 type Query {
