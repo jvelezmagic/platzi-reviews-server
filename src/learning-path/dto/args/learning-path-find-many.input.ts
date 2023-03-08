@@ -1,4 +1,6 @@
 import { ArgsType, Field, Int } from '@nestjs/graphql';
+import { Prisma } from '@prisma/client';
+import { IsOptional, Max, Min } from 'class-validator';
 
 import {
   LearningPathOrderByInput,
@@ -7,7 +9,9 @@ import {
 } from '../inputs';
 
 @ArgsType()
-export class LearningPathFindManyArgs {
+export class LearningPathFindManyArgs
+  implements Prisma.LearningPathFindManyArgs
+{
   @Field((type) => LearningPathWhereInput, { nullable: true })
   where?: LearningPathWhereInput;
 
@@ -18,8 +22,13 @@ export class LearningPathFindManyArgs {
   cursor?: LearningPathWhereUniqueInput;
 
   @Field((type) => Int, { nullable: true, name: 'take', defaultValue: 10 })
+  @Max(30)
+  @Min(1)
+  @IsOptional()
   take?: number;
 
   @Field((type) => Int, { nullable: true, name: 'skip', defaultValue: 0 })
+  @Min(0)
+  @IsOptional()
   skip?: number;
 }
