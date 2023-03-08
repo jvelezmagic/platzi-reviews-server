@@ -38,6 +38,9 @@ import configuration from './config/configuration';
       inject: [ConfigService],
       useFactory: async (configService: ConfigService) => ({
         autoSchemaFile: 'schema.gql',
+        cors: {
+          origin: ["https://rapidapi.com/"]
+        },
         plugins: [
           useHive({
             enabled: configService.get<boolean>('hive.enabled'),
@@ -60,4 +63,4 @@ import configuration from './config/configuration';
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule { }
