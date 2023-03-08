@@ -7,7 +7,7 @@ on:
  
 jobs:
   test:
-    name: Check Schema
+    name: Publish schema
     runs-on: ubuntu-latest
     environment: production
     env: 
@@ -21,5 +21,5 @@ jobs:
         run: |
           curl -sSL https://graphql-hive.com/install.sh | sh
  
-      - name: Schema Check
+      - name: Schema Publish
         run: hive schema:publish ./schema.gql --github
