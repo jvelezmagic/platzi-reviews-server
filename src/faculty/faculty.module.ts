@@ -3,6 +3,6 @@ import { FacultyService } from './faculty.service';
 import { FacultyResolver } from './faculty.resolver';
 
 @Module({
-  providers: [FacultyResolver, FacultyService]
+  providers: [FacultyResolver, FacultyService],
 })
 export class FacultyModule {}
