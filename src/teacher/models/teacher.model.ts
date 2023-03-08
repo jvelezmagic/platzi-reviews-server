@@ -12,8 +12,8 @@ export class Teacher implements Prisma.Teacher {
   @Field((type) => String)
   name: string;
 
-  @Field((type) => String)
-  description: string;
+  @Field((type) => String, { nullable: true })
+  description: string | null;
 
   @Field((type) => String)
   url: string;

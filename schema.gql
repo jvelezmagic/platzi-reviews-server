@@ -327,7 +327,7 @@ type Teacher {
   id: ID!
   username: String!
   name: String!
-  description: String!
+  description: String
   url: String!
   avatarUrl: String!
   courses(where: CourseWhereInput, orderBy: [CourseOrderByInput!], cursor: CourseWhereUniqueInput, take: Int = 10, skip: Int = 0): [Course!]!
