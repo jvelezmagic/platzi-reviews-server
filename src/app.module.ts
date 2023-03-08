@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { PrismaModule } from 'nestjs-prisma';
 
+import { EnvelopArmorPlugin } from '@escape.tech/graphql-armor';
 import { useHive } from '@graphql-hive/client';
 import { YogaDriver, YogaDriverConfig } from '@graphql-yoga/nestjs';
 import { GraphQLModule } from '@nestjs/graphql';
@@ -38,9 +39,6 @@ import configuration from './config/configuration';
       inject: [ConfigService],
       useFactory: async (configService: ConfigService) => ({
         autoSchemaFile: 'schema.gql',
-        cors: {
-          origin: ["https://rapidapi.com/"]
-        },
         plugins: [
           useHive({
             enabled: configService.get<boolean>('hive.enabled'),
@@ -48,6 +46,7 @@ import configuration from './config/configuration';
             token: configService.get<string>('hive.token'),
             usage: true,
           }),
+          EnvelopArmorPlugin(),
         ],
       }),
     }),
@@ -63,4 +62,4 @@ import configuration from './config/configuration';
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule { }
+export class AppModule {}

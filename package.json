@@ -20,6 +20,7 @@
     "test:e2e": "jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
+    "@escape.tech/graphql-armor": "^1.7.1",
     "@graphql-hive/client": "^0.23.1",
     "@graphql-yoga/nestjs": "^0.3.1",
     "@nestjs/common": "^9.0.0",
