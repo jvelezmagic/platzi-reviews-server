@@ -39,6 +39,8 @@ import configuration from './config/configuration';
       inject: [ConfigService],
       useFactory: async (configService: ConfigService) => ({
         autoSchemaFile: 'schema.gql',
+        graphiql: true,
+        maskedErrors: true,
         plugins: [
           useHive({
             enabled: configService.get<boolean>('hive.enabled'),
