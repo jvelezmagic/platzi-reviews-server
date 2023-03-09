@@ -112,6 +112,8 @@ model Review {
   course           Course   @relation(fields: [courseSlug], references: [slug])
 
   @@unique([reviewerUsername, courseSlug])
+  @@index([reviewerUsername])
+  @@index([courseSlug])
   @@map("reviews")
   @@schema("review")
 }
