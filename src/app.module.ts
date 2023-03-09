@@ -1,5 +1,6 @@
-import { MiddlewareConsumer, Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 import { PrismaModule } from 'nestjs-prisma';
 
@@ -8,6 +9,7 @@ import { useHive } from '@graphql-hive/client';
 import { YogaDriver, YogaDriverConfig } from '@graphql-yoga/nestjs';
 import { GraphQLModule } from '@nestjs/graphql';
 
+import { RapidApiGuard } from '@common/guards/rapid-api.guard';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -22,7 +24,6 @@ import { ReviewerModule } from './reviewer/reviewer.module';
 import { TeacherModule } from './teacher/teacher.module';
 
 import configuration from './config/configuration';
-import { RapidApiSecretMiddleware } from '@common/middleware/rapid-api.middleware';
 
 @Module({
   imports: [
@@ -63,14 +64,12 @@ import { RapidApiSecretMiddleware } from '@common/middleware/rapid-api.middlewar
     TeacherModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_GUARD,
+      useClass: RapidApiGuard,
+    },
+  ],
 })
-export class AppModule {
-  constructor(private readonly configService: ConfigService) {}
-
-  configure(consumer: MiddlewareConsumer) {
-    if (this.configService.get<string>('rapidApiKey')) {
-      consumer.apply(RapidApiSecretMiddleware).forRoutes('graphql');
-    }
-  }
-}
+export class AppModule {}
