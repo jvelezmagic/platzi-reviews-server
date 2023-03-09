@@ -21,7 +21,7 @@ export class ReviewerResolver {
   }
 
   @Query((returns) => [Reviewer], {
-    nullable: true,
+    nullable: false,
     name: 'reviewers',
     description: undefined,
   })

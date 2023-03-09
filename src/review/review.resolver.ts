@@ -22,7 +22,7 @@ export class ReviewResolver {
   }
 
   @Query((returns) => [Review], {
-    nullable: true,
+    nullable: false,
     name: 'reviews',
     description: undefined,
   })

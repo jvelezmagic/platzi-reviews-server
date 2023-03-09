@@ -371,8 +371,8 @@ enum ReviewOrderByRelevanceFieldEnum {
 }
 
 input ReviewWhereUniqueInput {
-  id: ID!
-  username: String!
+  id: ID
+  username: String
 }
 
 type Reviewer {
@@ -386,14 +386,14 @@ type Reviewer {
 type Query {
   course(where: CourseWhereUniqueInput!): Course
   courses(where: CourseWhereInput, orderBy: [CourseOrderByInput!], cursor: CourseWhereUniqueInput, take: Int = 10, skip: Int = 0): [Course!]!
-  faculty(where: FacultyWhereUniqueInput!): Faculty!
+  faculty(where: FacultyWhereUniqueInput!): Faculty
   faculties(where: FacultyWhereInput, orderBy: [FacultyOrderByInput!], cursor: FacultyWhereUniqueInput, take: Int = 8, skip: Int = 0): [Faculty!]!
   learningPath(where: LearningPathWhereUniqueInput!): LearningPath
   learningPaths(where: LearningPathWhereInput, orderBy: [LearningPathOrderByInput!], cursor: LearningPathWhereUniqueInput, take: Int = 10, skip: Int = 0): [LearningPath!]!
   review(where: ReviewWhereUniqueInput!): Review
-  reviews(where: ReviewWhereInput, orderBy: [ReviewOrderByInput!], cursor: ReviewWhereUniqueInput, take: Int = 10, skip: Int = 0): [Review!]
+  reviews(where: ReviewWhereInput, orderBy: [ReviewOrderByInput!], cursor: ReviewWhereUniqueInput, take: Int = 10, skip: Int = 0): [Review!]!
   reviewer(where: ReviewerWhereUniqueInput!): Reviewer
-  reviewers(where: ReviewerWhereInput, orderBy: [ReviewerOrderByInput!], cursor: ReviewerWhereUniqueInput, take: Int = 10, skip: Int = 0): [Reviewer!]
+  reviewers(where: ReviewerWhereInput, orderBy: [ReviewerOrderByInput!], cursor: ReviewerWhereUniqueInput, take: Int = 10, skip: Int = 0): [Reviewer!]!
   teacher(where: TeacherWhereUniqueInput!): Teacher
   teachers(where: TeacherWhereInput, orderBy: [TeacherOrderByInput!], cursor: TeacherWhereUniqueInput, take: Int = 10, skip: Int = 0): [Teacher!]!
 }
@@ -431,7 +431,7 @@ enum ReviewerOrderByRelevanceFieldEnum {
 }
 
 input TeacherWhereUniqueInput {
-  id: ID!
-  username: String!
-  url: String!
+  id: ID
+  username: String
+  url: String
 }

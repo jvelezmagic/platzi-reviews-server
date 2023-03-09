@@ -15,7 +15,7 @@ export class FacultyResolver {
   constructor(private readonly facultyService: FacultyService) {}
 
   @Query((returns) => Faculty, {
-    nullable: false,
+    nullable: true,
     name: 'faculty',
     description: undefined,
   })
