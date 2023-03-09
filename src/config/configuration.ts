@@ -6,6 +6,7 @@ export default () => ({
     debug: process.env.HIVE_DEBUG === 'true' || false,
     token: process.env.HIVE_TOKEN,
   },
+  rapidApiKey: process.env.RAPID_API_SECRET,
   scraper: {
     cronExpression: process.env.SCRAPER_CRON_EXPRESSION || '0 3 * * 1',
     coursesBatchConfig: {

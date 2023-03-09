@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { PrismaModule } from 'nestjs-prisma';
@@ -22,6 +22,7 @@ import { ReviewerModule } from './reviewer/reviewer.module';
 import { TeacherModule } from './teacher/teacher.module';
 
 import configuration from './config/configuration';
+import { RapidApiSecretMiddleware } from '@common/middleware/rapid-api.middleware';
 
 @Module({
   imports: [
@@ -64,4 +65,12 @@ import configuration from './config/configuration';
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule {
+  constructor(private readonly configService: ConfigService) {}
+
+  configure(consumer: MiddlewareConsumer) {
+    if (this.configService.get<string>('rapidApiKey')) {
+      consumer.apply(RapidApiSecretMiddleware).forRoutes('graphql');
+    }
+  }
+}
