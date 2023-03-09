@@ -387,7 +387,7 @@ type Query {
   course(where: CourseWhereUniqueInput!): Course
   courses(where: CourseWhereInput, orderBy: [CourseOrderByInput!], cursor: CourseWhereUniqueInput, take: Int = 10, skip: Int = 0): [Course!]!
   faculty(where: FacultyWhereUniqueInput!): Faculty!
-  faculties(where: FacultyWhereInput, orderBy: [FacultyOrderByInput!], cursor: FacultyWhereUniqueInput, take: Int = 10, skip: Int = 0): [Faculty!]!
+  faculties(where: FacultyWhereInput, orderBy: [FacultyOrderByInput!], cursor: FacultyWhereUniqueInput, take: Int = 8, skip: Int = 0): [Faculty!]!
   learningPath(where: LearningPathWhereUniqueInput!): LearningPath
   learningPaths(where: LearningPathWhereInput, orderBy: [LearningPathOrderByInput!], cursor: LearningPathWhereUniqueInput, take: Int = 10, skip: Int = 0): [LearningPath!]!
   review(where: ReviewWhereUniqueInput!): Review

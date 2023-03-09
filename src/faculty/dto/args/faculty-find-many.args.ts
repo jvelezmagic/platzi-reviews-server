@@ -19,7 +19,7 @@ export class FacultyFindManyArgs implements Prisma.FacultyFindManyArgs {
   @Field((type) => FacultyWhereUniqueInput, { nullable: true })
   cursor?: FacultyWhereUniqueInput;
 
-  @Field((type) => Int, { nullable: true, name: 'take', defaultValue: 10 })
+  @Field((type) => Int, { nullable: true, name: 'take', defaultValue: 8 })
   @Max(8)
   @Min(1)
   @IsOptional()
