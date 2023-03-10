@@ -20,7 +20,7 @@ export class ReviewFindManyArgs implements Prisma.ReviewFindManyArgs {
   cursor?: ReviewWhereUniqueInput;
 
   @Field((type) => Int, { nullable: true, name: 'take', defaultValue: 10 })
-  @Max(30)
+  @Max(50)
   @Min(1)
   @IsOptional()
   take?: number;
